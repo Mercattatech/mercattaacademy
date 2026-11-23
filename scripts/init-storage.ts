@@ -11,6 +11,7 @@ async function main() {
     endpoint,
     region: process.env.S3_REGION ?? "us-east-1",
     forcePathStyle: true,
+    maxAttempts: 1,
     credentials: {
       accessKeyId: process.env.S3_ACCESS_KEY ?? "",
       secretAccessKey: process.env.S3_SECRET_KEY ?? "",
