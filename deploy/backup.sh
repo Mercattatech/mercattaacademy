@@ -28,7 +28,7 @@ mv "$OUT.tmp" "$OUT"
 
 echo "[$(date -Is)] espelho dos arquivos"
 NETWORK="$("${COMPOSE[@]}" ps -q minio | xargs docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}')"
-docker run --rm --network "$NETWORK" -v "$BACKUP_DIR/files:/dest" --entrypoint sh minio/mc -c \
+docker run --rm --network "$NETWORK" -v "$BACKUP_DIR/files:/dest" --entrypoint sh quay.io/minio/mc -c \
   "mc alias set l http://minio:9000 '$MINIO_ROOT_USER' '$MINIO_ROOT_PASSWORD' >/dev/null && mc mirror --overwrite --remove l/pos-saas /dest"
 
 echo "[$(date -Is)] limpando dumps com mais de $KEEP_DAYS dias"

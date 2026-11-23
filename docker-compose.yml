@@ -19,7 +19,7 @@ services:
   # Arquivos (documentos dos alunos, PDFs, certificados), igual ao que roda na VPS.
   # Painel: http://localhost:9001 (usuário minio, senha minio-dev-secret)
   minio:
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
     container_name: pos-saas-files
     restart: unless-stopped
     command: server /data --console-address ":9001"
