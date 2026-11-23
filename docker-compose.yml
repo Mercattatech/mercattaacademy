@@ -1,0 +1,37 @@
+# Postgres local para desenvolvimento (Windows com Docker Desktop).
+# Sobe o banco já com os papéis pos_owner, pos_app e pos_reader e o banco pos_saas.
+#   docker compose up -d
+services:
+  postgres:
+    image: postgres:16
+    container_name: pos-saas-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pos_saas_data:/var/lib/postgresql/data
+      - ./db/setup/roles.sql:/docker-entrypoint-initdb.d/01-roles.sql:ro
+      - ./db/setup/database.sql:/docker-entrypoint-initdb.d/02-database.sql:ro
+
+  # Arquivos (documentos dos alunos, PDFs, certificados), igual ao que roda na VPS.
+  # Painel: http://localhost:9001 (usuário minio, senha minio-dev-secret)
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    container_name: pos-saas-files
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio-dev-secret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - pos_saas_files:/data
+
+volumes:
+  pos_saas_data:
+  pos_saas_files:

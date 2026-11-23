@@ -1,0 +1,120 @@
+@import "tailwindcss";
+@import "../styles/theme.css";
+/* Saída de testes do navegador: não é código, e cada arquivo novo recompilava o CSS. */
+@source not "../../.playwright-mcp";
+
+/*
+ * Design system "Plataforma Pós" (tokens em src/styles/theme.css, vindos de design/tokens).
+ * A cor da marca é a única variável por instituição: --color-brand (ver layout do tenant).
+ * Os nomes antigos (paper, ok, warn, font-serif, rounded-control/panel) seguem como
+ * apelidos para os novos tokens, assim as páginas existentes herdam o visual novo.
+ */
+@theme {
+  --color-paper: var(--color-canvas);
+  --color-ok: var(--color-success);
+  --color-warn: var(--color-warning);
+  --font-serif: var(--font-display);
+  /* Protótipo: botões e campos usam md (10px); blocos usam lg (16px). */
+  --radius-control: var(--radius-md);
+  --radius-panel: var(--radius-lg);
+}
+
+/* Spinner do estado "Salvando…" (aro claro com a ponta branca girando). */
+@keyframes ds-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+html {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+a {
+  text-underline-offset: 2px;
+}
+
+/*
+ * Estados do sistema de design (protótipo, aba Sistema de design · Componentes).
+ * Ficam fora de @layer de propósito: valem por cima das classes utilitárias das telas,
+ * então todo botão e campo da plataforma segue as mesmas regras.
+ */
+
+/* Foco visível: contorno de 2px na cor da marca, afastado 3px. */
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 3px;
+}
+
+/* Campo em foco: borda de 2px na cor da marca (sem mexer no tamanho) e halo suave.
+   Campos sem borda própria (.border-0) ficam dentro de um campo composto, que desenha o foco por fora. */
+:is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"]), select, textarea):not(.border-0):focus-visible {
+  border-color: var(--color-brand);
+  box-shadow: inset 0 0 0 1px var(--color-brand);
+  outline: 3px solid var(--color-brand-soft);
+  outline-offset: 0;
+}
+/* Lista de escolha: a seta do protótipo (expand_more, 20px, cinza) no lugar da seta do navegador.
+   O SelectField desenha a própria seta (.appearance-none) e fica de fora. */
+select:not([multiple], [size], .appearance-none) {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23696D75' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 20px;
+  padding-right: 38px;
+}
+
+/* O campo de dentro de um campo composto não desenha contorno: a caixa de fora mostra o foco (fieldGroupFocus). */
+:is(input, select, textarea).border-0:focus-visible {
+  outline: none;
+}
+/* Campo com erro: borda vermelha também durante a digitação. */
+:is(input, select, textarea)[aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+:is(input, select, textarea)[aria-invalid="true"]:not(.border-0):focus-visible {
+  border-color: var(--color-danger);
+  box-shadow: inset 0 0 0 1px var(--color-danger);
+  outline-color: var(--color-danger-soft);
+}
+
+/* Indisponível: texto cinza; botões cheios viram fundo afundado (não só transparência). */
+button:disabled:not([aria-busy="true"]) {
+  color: #8a8d93;
+  cursor: not-allowed;
+  opacity: 1;
+}
+button:is(.bg-brand, .bg-danger, .bg-ink):disabled:not([aria-busy="true"]) {
+  background: var(--color-sunken);
+  border-color: transparent;
+}
+
+/* Carregando ("Salvando…"): mantém a cor, a 85%, com cursor de espera. */
+button[aria-busy="true"] {
+  opacity: 0.85;
+  cursor: progress;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

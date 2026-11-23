@@ -1,0 +1,24 @@
+{
+	email {$ACME_EMAIL}
+	# Certificado HTTPS sob demanda: o Caddy pergunta ao app se o endereço é de uma
+	# instituição cadastrada antes de pedir o certificado (rota /api/tls-check).
+	on_demand_tls {
+		ask http://app:3000/api/tls-check
+	}
+}
+
+# Arquivos (MinIO): o navegador envia e baixa os vídeos direto daqui, por links assinados.
+https://arquivos.{$ROOT_DOMAIN} {
+	reverse_proxy minio:9000 {
+		flush_interval -1
+	}
+}
+
+# Domínio raiz e todos os subdomínios das instituições.
+https:// {
+	tls {
+		on_demand
+	}
+	encode zstd gzip
+	reverse_proxy app:3000
+}

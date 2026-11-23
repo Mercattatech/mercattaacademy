@@ -1,0 +1,64 @@
+/* Plataforma Pós · tokens Tailwind v4
+   Uso: @import "tailwindcss"; @import "./theme.css";
+   A cor de marca é a única variável por instituição. Troque --color-brand no <html data-theme> do tenant.
+   Requisito: --color-brand precisa ter contraste ≥ 4.5:1 com branco (texto em botões). */
+
+@theme {
+  /* Neutros */
+  --color-canvas: #F5F5F3;
+  --color-surface: #FFFFFF;
+  --color-sunken: #EFEFEC;
+  --color-ink: #16171A;
+  --color-ink-muted: #4B4E55;
+  --color-ink-subtle: #696D75;
+  --color-line: #E3E3E0;
+  --color-line-strong: #C9CAC6;
+
+  /* Marca (variável por instituição) */
+  --color-brand: #7B4F72;
+  --color-brand-strong: color-mix(in oklch, var(--color-brand) 82%, black);
+  --color-brand-soft: color-mix(in oklch, var(--color-brand) 9%, white);
+  --color-brand-ink: color-mix(in oklch, var(--color-brand) 78%, black);
+  --color-on-brand: #FFFFFF;
+
+  /* Estados */
+  --color-success: #1E7A4C;
+  --color-success-soft: #E8F4EC;
+  --color-warning: #8F5B00;
+  --color-warning-soft: #FBF1DC;
+  --color-danger: #B42318;
+  --color-danger-soft: #FCEBE8;
+
+  /* Tipografia */
+  --font-display: "Bricolage Grotesque Variable", "Bricolage Grotesque", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Instrument Sans Variable", "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
+  --text-display: 2.5rem;   --text-display--line-height: 1.1;
+  --text-h1: 2rem;          --text-h1--line-height: 1.15;
+  --text-h2: 1.5rem;        --text-h2--line-height: 1.25;
+  --text-h3: 1.25rem;       --text-h3--line-height: 1.3;
+  --text-body: 1rem;        --text-body--line-height: 1.5;
+  --text-sm: 0.875rem;      --text-sm--line-height: 1.45;
+  --text-xs: 0.8125rem;     --text-xs--line-height: 1.4;
+
+  /* Espaçamento: base 4px (p-1 = 4px, p-4 = 16px...) */
+  --spacing: 0.25rem;
+
+  /* Raios */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  /* Elevação (uso raro: modal e menus flutuantes) */
+  --shadow-overlay: 0 12px 32px -8px rgb(22 23 26 / 0.18), 0 2px 6px rgb(22 23 26 / 0.06);
+}
+
+/* Recalcula as derivadas quando o tenant troca a marca */
+[data-theme] {
+  --color-brand-strong: color-mix(in oklch, var(--color-brand) 82%, black);
+  --color-brand-soft: color-mix(in oklch, var(--color-brand) 9%, white);
+  --color-brand-ink: color-mix(in oklch, var(--color-brand) 78%, black);
+}
+[data-theme="bressane"] { --color-brand: #7B4F72; }
+[data-theme="aurora"]   { --color-brand: #1E5F74; }
+[data-theme="ssd"]      { --color-brand: #2E4A7D; } /* painel master da plataforma */

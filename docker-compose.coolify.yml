@@ -1,0 +1,141 @@
+# ==============================================================================
+# Mercatta Academy / POS-SAAS - Stack para Coolify / Hostinger VPS
+# ==============================================================================
+#
+# Para usar no Coolify:
+# 1. No Coolify: Projects -> New Resource -> Docker Compose
+# 2. Conecte seu repositório Git ou cole este arquivo.
+# 3. Preencha as variáveis de ambiente no Coolify (Environment Variables).
+#
+name: mercatta-academy
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?Defina POSTGRES_SUPERUSER_PASSWORD}
+      POS_OWNER_PASSWORD: ${POS_OWNER_PASSWORD:?Defina POS_OWNER_PASSWORD}
+      POS_APP_PASSWORD: ${POS_APP_PASSWORD:?Defina POS_APP_PASSWORD}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ./db/setup/roles.sql:/docker-entrypoint-initdb.d/01-roles.sql:ro
+      - ./deploy/initdb/02-passwords.sh:/docker-entrypoint-initdb.d/02-passwords.sh:ro
+      - ./db/setup/database.sql:/docker-entrypoint-initdb.d/03-database.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Defina MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Defina MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Cria o bucket S3 privado automaticamente na inicialização
+  minio-init:
+    image: minio/mc
+    depends_on:
+      - minio
+    restart: "no"
+    entrypoint: >
+      sh -c "until mc alias set l http://minio:9000 '${MINIO_ROOT_USER}' '${MINIO_ROOT_PASSWORD}' >/dev/null 2>&1; do sleep 2; done;
+             mc mb --ignore-existing l/pos-saas"
+
+  # Executa as migrations do banco e cria o usuário Master automaticamente
+  migrator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: tools
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://pos_app:${POS_APP_PASSWORD}@postgres:5432/pos_saas
+      DATABASE_OWNER_URL: postgres://pos_owner:${POS_OWNER_PASSWORD}@postgres:5432/pos_saas
+      ROOT_DOMAIN: ${ROOT_DOMAIN:?Defina ROOT_DOMAIN}
+      BETTER_AUTH_URL: https://${ROOT_DOMAIN}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Defina BETTER_AUTH_SECRET}
+      PAYMENT_SECRET: ${PAYMENT_SECRET:?Defina PAYMENT_SECRET}
+      MASTER_EMAIL: ${MASTER_EMAIL:-}
+      MASTER_PASSWORD: ${MASTER_PASSWORD:-}
+    command: >
+      sh -c "npm run db:migrate &&
+             if [ -n \"$$MASTER_EMAIL\" ] && [ -n \"$$MASTER_PASSWORD\" ]; then
+               echo 'Configurando conta Master...';
+               npm run seed:master;
+             fi"
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runner
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrator:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgres://pos_app:${POS_APP_PASSWORD}@postgres:5432/pos_saas
+      DATABASE_OWNER_URL: postgres://pos_owner:${POS_OWNER_PASSWORD}@postgres:5432/pos_saas
+      ROOT_DOMAIN: ${ROOT_DOMAIN:?Defina ROOT_DOMAIN}
+      BETTER_AUTH_URL: https://${ROOT_DOMAIN}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Defina BETTER_AUTH_SECRET}
+      PAYMENT_SECRET: ${PAYMENT_SECRET:?Defina PAYMENT_SECRET}
+      S3_ENDPOINT: http://minio:9000
+      S3_PUBLIC_ENDPOINT: https://arquivos.${ROOT_DOMAIN}
+      S3_REGION: us-east-1
+      S3_BUCKET: pos-saas
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      DAILY_API_KEY: ${DAILY_API_KEY:-}
+      DAILY_WEBHOOK_SECRET: ${DAILY_WEBHOOK_SECRET:-}
+    expose:
+      - "3000"
+
+  # Caddy provê SSL automático sob demanda para todos os subdomínios (*.dominio.com.br)
+  # sem precisar de chaves DNS de provedor.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+      - minio
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL:?Defina ACME_EMAIL}
+      ROOT_DOMAIN: ${ROOT_DOMAIN:?Defina ROOT_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile.vps:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pg_data:
+  minio_data:
+  caddy_data:
+  caddy_config:

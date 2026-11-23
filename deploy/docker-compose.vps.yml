@@ -1,0 +1,124 @@
+# Tudo numa VPS só: app + Postgres + MinIO (arquivos) + Caddy (HTTPS).
+# Para o modelo "app na Vercel, banco na VPS", use docker-compose.prod.yml.
+#
+# Uso, dentro de deploy/:
+#   cp .env.vps.example .env.vps          # e preencha
+#   docker compose --env-file .env.vps -f docker-compose.vps.yml up -d --build
+#   docker compose --env-file .env.vps -f docker-compose.vps.yml --profile tools run --rm tools npm run db:migrate
+name: plataforma
+
+x-app-env: &app-env
+  NODE_ENV: production
+  DATABASE_URL: postgres://pos_app:${POS_APP_PASSWORD}@postgres:5432/pos_saas
+  DATABASE_OWNER_URL: postgres://pos_owner:${POS_OWNER_PASSWORD}@postgres:5432/pos_saas
+  ROOT_DOMAIN: ${ROOT_DOMAIN:?defina no .env.vps}
+  BETTER_AUTH_URL: https://${ROOT_DOMAIN}
+  BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?defina no .env.vps}
+  PAYMENT_SECRET: ${PAYMENT_SECRET:?defina no .env.vps}
+  S3_ENDPOINT: http://minio:9000
+  # Endereço que o NAVEGADOR usa para enviar e assistir vídeos (links assinados).
+  S3_PUBLIC_ENDPOINT: https://arquivos.${ROOT_DOMAIN}
+  S3_REGION: us-east-1
+  S3_BUCKET: pos-saas
+  S3_ACCESS_KEY: ${MINIO_ROOT_USER}
+  S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+  RESEND_API_KEY: ${RESEND_API_KEY:-}
+  EMAIL_FROM: ${EMAIL_FROM:-}
+  DAILY_API_KEY: ${DAILY_API_KEY:-}
+  DAILY_WEBHOOK_SECRET: ${DAILY_WEBHOOK_SECRET:-}
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?defina no .env.vps}
+      POS_OWNER_PASSWORD: ${POS_OWNER_PASSWORD:?defina no .env.vps}
+      POS_APP_PASSWORD: ${POS_APP_PASSWORD:?defina no .env.vps}
+    # Só local (backup e manutenção). Nunca publique 5432 na internet.
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+      - ../db/setup/roles.sql:/docker-entrypoint-initdb.d/01-roles.sql:ro
+      - ./initdb/02-passwords.sh:/docker-entrypoint-initdb.d/02-passwords.sh:ro
+      - ../db/setup/database.sql:/docker-entrypoint-initdb.d/03-database.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?defina no .env.vps}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?defina no .env.vps}
+    volumes:
+      - minio_data:/data
+
+  # Cria o bucket privado na primeira subida e termina.
+  minio-init:
+    image: minio/mc
+    depends_on:
+      - minio
+    restart: "no"
+    entrypoint: >
+      sh -c "until mc alias set l http://minio:9000 '${MINIO_ROOT_USER}' '${MINIO_ROOT_PASSWORD}' >/dev/null 2>&1; do sleep 2; done;
+             mc mb --ignore-existing l/pos-saas"
+
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: runner
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    environment: *app-env
+    expose:
+      - "3000"
+
+  # Migrations e conta master. Só roda quando chamado: --profile tools run --rm tools ...
+  tools:
+    profiles: ["tools"]
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: tools
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *app-env
+      MASTER_EMAIL: ${MASTER_EMAIL:-}
+      MASTER_PASSWORD: ${MASTER_PASSWORD:-}
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - app
+      - minio
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL:?defina no .env.vps}
+      ROOT_DOMAIN: ${ROOT_DOMAIN:?defina no .env.vps}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile.vps:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pg_data:
+  minio_data:
+  caddy_data:
+  caddy_config:

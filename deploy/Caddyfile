@@ -1,0 +1,9 @@
+{
+	email {$ACME_EMAIL}
+}
+
+# API S3 do MinIO com HTTPS automático (Let's Encrypt).
+# O painel do MinIO (9001) não é exposto; acesse por túnel SSH se precisar.
+{$S3_DOMAIN} {
+	reverse_proxy minio:9000
+}
