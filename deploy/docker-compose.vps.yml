@@ -60,16 +60,6 @@ services:
     volumes:
       - minio_data:/data
 
-  # Cria o bucket privado na primeira subida e termina.
-  minio-init:
-    image: quay.io/minio/mc
-    depends_on:
-      - minio
-    restart: "no"
-    entrypoint: >
-      sh -c "until mc alias set l http://minio:9000 '${MINIO_ROOT_USER}' '${MINIO_ROOT_PASSWORD}' >/dev/null 2>&1; do sleep 2; done;
-             mc mb --ignore-existing l/pos-saas"
-
   app:
     build:
       context: ..
@@ -79,8 +69,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      minio-init:
-        condition: service_completed_successfully
     environment: *app-env
     expose:
       - "3000"

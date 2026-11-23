@@ -38,23 +38,8 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Defina MINIO_ROOT_PASSWORD}
     volumes:
       - minio_data:/data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
-  # Cria o bucket S3 privado automaticamente na inicialização
-  minio-init:
-    image: quay.io/minio/mc
-    depends_on:
-      - minio
-    restart: "no"
-    entrypoint: >
-      sh -c "until mc alias set l http://minio:9000 '${MINIO_ROOT_USER}' '${MINIO_ROOT_PASSWORD}' >/dev/null 2>&1; do sleep 2; done;
-             mc mb --ignore-existing l/pos-saas"
-
-  # Executa as migrations do banco e cria o usuário Master automaticamente
+  # Executa as migrations do banco, inicializa o bucket S3 e cria o usuário Master automaticamente
   migrator:
     build:
       context: .
@@ -64,6 +49,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      minio:
+        condition: service_started
     environment:
       NODE_ENV: production
       DATABASE_URL: postgres://pos_app:${POS_APP_PASSWORD}@postgres:5432/pos_saas
@@ -72,10 +59,16 @@ services:
       BETTER_AUTH_URL: https://${ROOT_DOMAIN}
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Defina BETTER_AUTH_SECRET}
       PAYMENT_SECRET: ${PAYMENT_SECRET:?Defina PAYMENT_SECRET}
+      S3_ENDPOINT: http://minio:9000
+      S3_REGION: us-east-1
+      S3_BUCKET: pos-saas
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
       MASTER_EMAIL: ${MASTER_EMAIL:-}
       MASTER_PASSWORD: ${MASTER_PASSWORD:-}
     command: >
-      sh -c "npm run db:migrate &&
+      sh -c "npm run storage:init &&
+             npm run db:migrate &&
              if [ -n \"$$MASTER_EMAIL\" ] && [ -n \"$$MASTER_PASSWORD\" ]; then
                echo 'Configurando conta Master...';
                npm run seed:master;
@@ -91,8 +84,6 @@ services:
       postgres:
         condition: service_healthy
       migrator:
-        condition: service_completed_successfully
-      minio-init:
         condition: service_completed_successfully
     environment:
       NODE_ENV: production
